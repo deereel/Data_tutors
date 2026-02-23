@@ -1,0 +1,108 @@
+# PHP files
+*.php.swp
+*.php.bak
+*.php.old
+*.phtml~
+*.tmp
+
+# Log files
+*.log
+logs/
+error_log
+
+# Configuration files with sensitive data
+config/database.php
+config/config.local.php
+.env
+.env.local
+
+# Session files
+session/
+*.sess
+sess_*
+
+# Cache directories
+cache/
+tmp/
+temp/
+*.cache
+
+# Upload directories
+uploads/
+public/uploads/
+storage/uploads/
+
+# User-generated content
+content/uploads/
+media/
+
+# Composer dependencies
+vendor/
+
+# Node.js dependencies
+node_modules/
+
+# Bower dependencies
+bower_components/
+
+# Build artifacts
+build/
+dist/
+*.min.js
+*.min.css
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database files
+*.sql
+*.sql.gz
+*.sql.zip
+*.bak
+*.backup
+
+# Virtual environment files
+venv/
+.env
+env/
+
+# Test and coverage files
+coverage/
+.coverage
+*.coverage
+.phpunit.result.cache
+tests/_output/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Security
+*.pem
+*.key
+*.crt
+*.p12
+
+# Local configuration
+local.config.php
+config.local.php
+
+# Deployment files
+.deploy/
+deploy.*
+
+# Web server files
+web.config
+.htaccess.bak
