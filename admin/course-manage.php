@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAdminUser()) {
     // ============ MODULE ACTIONS ============
     if ($action === 'add_module') {
         $title = sanitize($_POST['title'] ?? '');
-        $description = sanitize($_POST['description'] ?? '');
+        $description = $_POST['description'] ?? '';
         
         $orderIndex = Module::getMaxOrderIndex($courseId) + 1;
         $moduleId = Module::create([
@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAdminUser()) {
         if ($moduleId > 0) {
             Module::update($moduleId, [
                 'title' => sanitize($_POST['title'] ?? ''),
-                'description' => sanitize($_POST['description'] ?? ''),
+                'description' => $_POST['description'] ?? '',
                 'is_published' => isset($_POST['is_published']) ? 1 : 0
             ]);
             $success = 'Module updated successfully.';
@@ -102,40 +102,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAdminUser()) {
         }
     }
     
-    elseif ($action === 'reorder_modules') {
-        // Handle module reordering
-        $moduleOrders = $_POST['module_order'] ?? [];
-        if (!empty($moduleOrders)) {
-            foreach ($moduleOrders as $index => $moduleId) {
-                Module::updateOrder($moduleId, $index + 1);
-            }
-            $success = 'Module order updated successfully.';
-        }
-    }
+     elseif ($action === 'reorder_modules') {
+         // Handle module reordering
+         $moduleOrders = $_POST['module_order'] ?? [];
+         if (!empty($moduleOrders)) {
+             foreach ($moduleOrders as $index => $moduleId) {
+                 Module::updateOrder($moduleId, $index + 1);
+             }
+             $success = 'Module order updated successfully.';
+         }
+     }
+     
+      elseif ($action === 'reorder_lessons') {
+          // Handle lesson reordering
+          error_log('reorder_lessons called');
+          error_log('POST data: ' . print_r($_POST, true));
+          $lessonOrders = $_POST['lesson_order'] ?? [];
+          $moduleId = intval($_POST['module_id'] ?? 0);
+          error_log('Lesson orders: ' . print_r($lessonOrders, true));
+          error_log('Module ID: ' . $moduleId);
+          if (!empty($lessonOrders) && $moduleId > 0) {
+              foreach ($lessonOrders as $index => $lessonId) {
+                  error_log('Updating lesson ' . $lessonId . ' to order ' . ($index + 1));
+                  Lesson::updateOrder($lessonId, $index + 1);
+              }
+              $success = 'Lesson order updated successfully.';
+          } else {
+              error_log('Invalid data for reordering lessons');
+          }
+          // Return JSON response for AJAX
+          header('Content-Type: application/json');
+          echo json_encode(['success' => true, 'message' => $success]);
+          exit;
+      }
     
     // ============ LESSON ACTIONS ============
-    elseif ($action === 'add_lesson') {
-        $moduleId = intval($_POST['module_id'] ?? 0);
-        $title = sanitize($_POST['title'] ?? '');
-        $description = sanitize($_POST['description'] ?? '');
-        $content = $_POST['content'] ?? '';
-        $videoUrl = sanitize($_POST['video_url'] ?? '');
-        
-        // Generate slug from title (or use default if title is empty)
-        $slug = !empty($title) ? strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $title))) : 'lesson-' . time();
-        $orderIndex = Lesson::getMaxOrderIndex($moduleId) + 1;
-        
-        $lessonId = Lesson::create([
-            'module_id' => $moduleId,
-            'title' => $title,
-            'slug' => $slug,
-            'description' => $description,
-            'content' => $content,
-            'video_url' => $videoUrl,
-            'order_index' => $orderIndex,
-            'is_free' => isset($_POST['is_free']) ? 1 : 0,
-            'is_published' => isset($_POST['is_published']) ? 1 : 0
-        ]);
+     elseif ($action === 'add_lesson') {
+         $moduleId = intval($_POST['module_id'] ?? 0);
+         $title = sanitize($_POST['title'] ?? '');
+         $description = $_POST['description'] ?? '';
+         $content = $_POST['content'] ?? '';
+         $videoUrl = sanitize($_POST['video_url'] ?? '');
+         $videoStart = intval($_POST['video_start'] ?? 0);
+         $videoStop = intval($_POST['video_stop'] ?? 0);
+         $videoDuration = intval($_POST['video_duration'] ?? 0);
+         
+         // Generate slug from title (or use default if title is empty)
+         $slug = !empty($title) ? strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $title))) : 'lesson-' . time();
+         $orderIndex = Lesson::getMaxOrderIndex($moduleId) + 1;
+         
+         $lessonId = Lesson::create([
+             'module_id' => $moduleId,
+             'title' => $title,
+             'slug' => $slug,
+             'description' => $description,
+             'content' => $content,
+             'video_url' => $videoUrl,
+             'video_start' => $videoStart,
+             'video_stop' => $videoStop,
+             'video_duration' => $videoDuration,
+             'order_index' => $orderIndex,
+             'is_free' => isset($_POST['is_free']) ? 1 : 0,
+             'is_published' => isset($_POST['is_published']) ? 1 : 0
+         ]);
         
         if ($lessonId) {
             $success = 'Lesson created successfully.';
@@ -145,19 +174,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAdminUser()) {
         }
     }
     
-    elseif ($action === 'update_lesson') {
-        $lessonId = intval($_POST['lesson_id'] ?? 0);
-        if ($lessonId > 0) {
-            Lesson::update($lessonId, [
-                'title' => sanitize($_POST['title'] ?? ''),
-                'description' => sanitize($_POST['description'] ?? ''),
-                'content' => $_POST['content'] ?? '',
-                'video_url' => sanitize($_POST['video_url'] ?? ''),
-                'video_duration' => intval($_POST['video_duration'] ?? 0),
-                'is_free' => isset($_POST['is_free']) ? 1 : 0,
-                'is_published' => isset($_POST['is_published']) ? 1 : 0
-            ]);
-            $success = 'Lesson updated successfully.';
+     elseif ($action === 'update_lesson') {
+         $lessonId = intval($_POST['lesson_id'] ?? 0);
+         if ($lessonId > 0) {
+             Lesson::update($lessonId, [
+                 'title' => sanitize($_POST['title'] ?? ''),
+                 'description' => $_POST['description'] ?? '',
+                 'content' => $_POST['content'] ?? '',
+                 'video_url' => sanitize($_POST['video_url'] ?? ''),
+                 'video_start' => intval($_POST['video_start'] ?? 0),
+                 'video_stop' => intval($_POST['video_stop'] ?? 0),
+                 'video_duration' => intval($_POST['video_duration'] ?? 0),
+                 'is_free' => isset($_POST['is_free']) ? 1 : 0,
+                 'is_published' => isset($_POST['is_published']) ? 1 : 0
+             ]);
+            
+            // Reload the page to show updated data
+            header('Location: ' . $_SERVER['PHP_SELF'] . '?course_id=' . $courseId);
+            exit;
         }
     }
     
@@ -251,20 +285,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAdminUser()) {
         }
     }
     
-    elseif ($action === 'delete_resource') {
-        $resourceId = intval($_POST['resource_id'] ?? 0);
-        if ($resourceId > 0) {
-            $resource = LessonResource::getById($resourceId);
-            if ($resource && !empty($resource['file_path'])) {
-                $filePath = '../' . $resource['file_path'];
-                if (file_exists($filePath)) {
-                    unlink($filePath);
-                }
-            }
-            LessonResource::delete($resourceId);
-            $success = 'Resource deleted successfully.';
-        }
-    }
+     elseif ($action === 'delete_resource') {
+         $resourceId = intval($_POST['resource_id'] ?? 0);
+         if ($resourceId > 0) {
+             $resource = LessonResource::getById($resourceId);
+             if ($resource && !empty($resource['file_path'])) {
+                 $filePath = '../' . $resource['file_path'];
+                 if (file_exists($filePath)) {
+                     unlink($filePath);
+                 }
+             }
+             LessonResource::delete($resourceId);
+             // Return success response in JSON format
+             header('Content-Type: application/json');
+             echo json_encode([
+                 'success' => true,
+                 'message' => 'Resource deleted successfully.'
+             ]);
+         } else {
+             header('Content-Type: application/json');
+             echo json_encode([
+                 'success' => false,
+                 'error' => 'Invalid resource ID'
+             ]);
+         }
+         exit;
+     }
     
     // ============ QUIZ ACTIONS ============
     elseif ($action === 'add_quiz') {
@@ -868,38 +914,58 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                                             <?php endif; ?>
                                         </div>
                                     </div>
-                                    <div class="module-content" id="module-content-<?= $module['id'] ?>" style="display: none;">
+                                     <div class="module-content" id="module-content-<?= $module['id'] ?>" style="display: none;">
                                         <?php $lessons = Lesson::getAllByModule($module['id']); ?>
                                         <?php if (empty($lessons)): ?>
                                             <p style="color: var(--gray-500); text-align: center; padding: 1rem;">No lessons yet.</p>
                                         <?php else: ?>
-                                            <?php foreach ($lessons as $lesson): ?>
-                                            <div class="lesson-item">
-                                                <div class="lesson-title">
-                                                    <div class="lesson-icon">
-                                                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                                    </div>
-                                                    <div>
-                                                        <div><?= sanitize($lesson['title']) ?></div>
-                                                        <div style="font-size: 0.75rem; color: var(--gray-500);">
-                                                            <?= $lesson['video_url'] ? 'Video' : 'Text' ?> 
-                                                            <?= $lesson['is_free'] ? '| Free Preview' : '' ?>
-                                                            | <?= $lesson['is_published'] ? '<span class="badge badge-success">Published</span>' : '<span class="badge badge-warning">Draft</span>' ?>
+                                            <ul class="draggable-list" id="lessonsList-<?= $module['id'] ?>">
+                                                <?php foreach ($lessons as $lesson): ?>
+                                                <li class="draggable-item lesson-item" draggable="true" data-lesson-id="<?= $lesson['id'] ?>" data-module-id="<?= $module['id'] ?>">
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                                        <div class="lesson-title">
+                                                            <span class="drag-handle" onclick="event.stopPropagation()" title="Drag to reorder">
+                                                                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg>
+                                                            </span>
+                                                            <div class="lesson-icon">
+                                                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                            </div>
+                                                            <div>
+                                                                <div><?= sanitize($lesson['title']) ?></div>
+                                                                <div style="font-size: 0.75rem; color: var(--gray-500);">
+                                                                    <?= $lesson['video_url'] ? 'Video' : 'Text' ?> 
+                                                                    <?= $lesson['is_free'] ? '| Free Preview' : '' ?>
+                                                                    | <?= $lesson['is_published'] ? '<span class="badge badge-success">Published</span>' : '<span class="badge badge-warning">Draft</span>' ?>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="lesson-actions">
+                                                            <?php if (isAdminUser()): ?>
+                                                            <button class="btn btn-secondary btn-sm" onclick="openModal('editLesson', <?= $lesson['id'] ?>)">Edit</button>
+                                                            <button class="btn btn-danger btn-sm" onclick="deleteLesson(<?= $lesson['id'] ?>)">Delete</button>
+                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <div class="lesson-actions">
-                                                    <?php if (isAdminUser()): ?>
-                                                    <button class="btn btn-secondary btn-sm" onclick="openModal('editLesson', <?= $lesson['id'] ?>)">Edit</button>
-                                                    <button class="btn btn-danger btn-sm" onclick="deleteLesson(<?= $lesson['id'] ?>)">Delete</button>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                            <?php endforeach; ?>
+                                                </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                            
+                                            <!-- Hidden form for reordering lessons -->
+                                            <form method="POST" id="reorderLessonsForm-<?= $module['id'] ?>" style="display: none;">
+                                                <input type="hidden" name="action" value="reorder_lessons">
+                                                <input type="hidden" name="module_id" value="<?= $module['id'] ?>">
+                                                <?php foreach ($lessons as $index => $lesson): ?>
+                                                <input type="hidden" name="lesson_order[<?= $index ?>]" value="<?= $lesson['id'] ?>" id="lesson_order_<?= $module['id'] ?>_<?= $index ?>">
+                                                <?php endforeach; ?>
+                                            </form>
                                         <?php endif; ?>
                                         
-                                        <?php if (isAdminUser()): ?>
-                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
+                                         <?php if (isAdminUser()): ?>
+                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200); display: flex; gap: 0.75rem;">
+                                             <button class="btn btn-warning btn-sm" id="reorderLessonsBtn-<?= $module['id'] ?>" onclick="toggleReorderMode('lessons', <?= $module['id'] ?>)">
+                                                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg>
+                                                 Rearrange Lessons
+                                             </button>
                                             <button class="btn btn-primary btn-sm" onclick="openModal('addLesson', <?= $module['id'] ?>)">
                                                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                                                 Add Lesson
@@ -1171,8 +1237,24 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                         <input type="hidden" name="description" id="addLessonDescriptionHidden">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Video URL</label>
-                        <input type="url" name="video_url" class="form-input" placeholder="YouTube or video URL">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="addLessonHasVideo" onchange="toggleVideoFields('add')">
+                            <span>Add Video</span>
+                        </label>
+                    </div>
+                    <div id="addLessonVideoFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">YouTube Video URL</label>
+                            <input type="text" name="video_url" class="form-input" placeholder="https://www.youtube.com/watch?v=...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Start Time (seconds)</label>
+                            <input type="number" name="video_start" class="form-input" min="0" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Stop Time (seconds)</label>
+                            <input type="number" name="video_stop" class="form-input" min="0" placeholder="Leave blank for full video">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Lesson Content</label>
@@ -1221,12 +1303,28 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                         <input type="hidden" name="description" id="editLessonDescriptionHidden">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Video URL</label>
-                        <input type="url" name="video_url" id="editLessonVideoUrl" class="form-input">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="editLessonHasVideo" onchange="toggleVideoFields('edit')">
+                            <span>Add Video</span>
+                        </label>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Video Duration (seconds)</label>
-                        <input type="number" name="video_duration" id="editLessonVideoDuration" class="form-input" min="0">
+                    <div id="editLessonVideoFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">YouTube Video URL</label>
+                            <input type="text" name="video_url" id="editLessonVideoUrl" class="form-input" placeholder="https://www.youtube.com/watch?v=...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Start Time (seconds)</label>
+                            <input type="number" name="video_start" id="editLessonVideoStart" class="form-input" min="0" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Stop Time (seconds)</label>
+                            <input type="number" name="video_stop" id="editLessonVideoStop" class="form-input" min="0" placeholder="Leave blank for full video">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Video Duration (seconds)</label>
+                            <input type="number" name="video_duration" id="editLessonVideoDuration" class="form-input" min="0">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Lesson Content</label>
@@ -1506,13 +1604,14 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
     
     <script>
         // Module data for JavaScript
-        const modulesData = <?= json_encode($modules) ?>;
+         const modulesData = <?= json_encode($modules) ?>;
         const lessonsData = {};
         const quizzesData = <?= json_encode(array_combine(array_column($quizzes, 'id'), $quizzes)) ?>;
         const questionsData = {};
-        let isReorderMode = false;
-        let currentReorderType = null; // 'modules', 'quizzes', or 'questions'
+         let isReorderMode = false;
+        let currentReorderType = null; // 'modules', 'quizzes', 'questions', or 'lessons'
         let currentActiveTab = 'modules'; // Track current active tab
+        let moduleId = null; // Track module ID for lesson reordering
         
         <?php foreach ($modules as $module): ?>
         lessonsData[<?= $module['id'] ?>] = <?= json_encode(Lesson::getAllByModule($module['id'])) ?>;
@@ -1551,7 +1650,7 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
             }
         }
         
-        function toggleModule(moduleId) {
+         function toggleModule(moduleId) {
             // Don't toggle if in reorder mode for modules
             if (isReorderMode && currentReorderType === 'modules') return;
             
@@ -1560,9 +1659,41 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 arrow.style.transform = 'rotate(90deg)';
+                // Save expanded state to localStorage
+                saveExpandedModules();
             } else {
                 content.style.display = 'none';
                 arrow.style.transform = 'rotate(0deg)';
+                // Save expanded state to localStorage
+                saveExpandedModules();
+            }
+        }
+        
+        function saveExpandedModules() {
+            const expandedModules = [];
+            document.querySelectorAll('.module-content').forEach(content => {
+                if (content.style.display === 'block') {
+                    const moduleId = content.id.replace('module-content-', '');
+                    expandedModules.push(moduleId);
+                }
+            });
+            localStorage.setItem('expandedModules_' + <?= $courseId ?>, JSON.stringify(expandedModules));
+        }
+        
+        function loadExpandedModules() {
+            const savedModules = localStorage.getItem('expandedModules_' + <?= $courseId ?>);
+            if (savedModules) {
+                const expandedModules = JSON.parse(savedModules);
+                expandedModules.forEach(moduleId => {
+                    const content = document.getElementById('module-content-' + moduleId);
+                    if (content) {
+                        content.style.display = 'block';
+                        const arrow = content.previousElementSibling.querySelector('.module-arrow');
+                        if (arrow) {
+                            arrow.style.transform = 'rotate(90deg)';
+                        }
+                    }
+                });
             }
         }
         
@@ -1581,50 +1712,97 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
             }
         }
         
-        function toggleReorderMode(type = null) {
-            // Determine reorder type based on current tab if not specified
-            const reorderType = type || (currentActiveTab === 'modules' ? 'modules' : currentActiveTab === 'quizzes' ? 'quizzes' : null);
-            
-            // If already in reorder mode and clicking same type, exit
-            if (isReorderMode && currentReorderType === reorderType) {
-                isReorderMode = false;
-                currentReorderType = null;
-            } else {
-                isReorderMode = true;
-                currentReorderType = reorderType;
-            }
-            
-            const btn = document.getElementById('reorderBtn');
-            const allItems = document.querySelectorAll('.draggable-item');
-            
-            if (isReorderMode) {
-                btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Done Rearranging';
-                btn.classList.remove('btn-warning');
-                btn.classList.add('btn-success');
-                
-                // Enable drag handles only for selected type
-                allItems.forEach(item => {
-                    if (type === 'modules' && item.dataset.moduleId) {
-                        item.classList.add('reorder-mode');
-                    } else if (type === 'quizzes' && item.dataset.quizId) {
-                        item.classList.add('reorder-mode');
-                    } else if (type === 'questions' && item.dataset.questionId) {
-                        item.classList.add('reorder-mode');
-                    } else {
-                        item.classList.remove('reorder-mode');
-                    }
-                });
-            } else {
-                btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg> Rearrange';
-                btn.classList.remove('btn-success');
-                btn.classList.add('btn-warning');
-                
-                // Disable all drag handles
-                allItems.forEach(item => {
-                    item.classList.remove('reorder-mode');
-                });
-            }
-        }
+          function toggleReorderMode(type, moduleId = null) {
+             // For lessons, we need to handle module-specific state
+             if (type === 'lessons') {
+                 const btn = document.getElementById('reorderLessonsBtn-' + moduleId);
+                 const lessonsList = document.getElementById('lessonsList-' + moduleId);
+                 const items = lessonsList ? lessonsList.querySelectorAll('.draggable-item') : [];
+                 
+                 // Check if we're in lesson reorder mode for this module
+                 const isLessonReorderMode = btn.classList.contains('btn-success');
+                 
+                 if (isLessonReorderMode) {
+                     // Exit lesson reorder mode
+                     btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg> Rearrange Lessons';
+                     btn.classList.remove('btn-success');
+                     btn.classList.add('btn-warning');
+                     items.forEach(item => {
+                         item.classList.remove('reorder-mode');
+                     });
+                     // If this was the only reorder mode active, reset global state
+                     if (currentReorderType === 'lessons') {
+                         isReorderMode = false;
+                         currentReorderType = null;
+                     }
+                 } else {
+                     // Enter lesson reorder mode
+                     btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Done Rearranging';
+                     btn.classList.remove('btn-warning');
+                     btn.classList.add('btn-success');
+                     items.forEach(item => {
+                         item.classList.add('reorder-mode');
+                     });
+                     // Set global state
+                     isReorderMode = true;
+                     currentReorderType = 'lessons';
+                     // Make sure other reorder modes are disabled
+                     const mainBtn = document.getElementById('reorderBtn');
+                     if (mainBtn.classList.contains('btn-success')) {
+                         mainBtn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg> Rearrange';
+                         mainBtn.classList.remove('btn-success');
+                         mainBtn.classList.add('btn-warning');
+                         document.querySelectorAll('.draggable-item').forEach(item => {
+                             if (!item.dataset.lessonId) {
+                                 item.classList.remove('reorder-mode');
+                             }
+                         });
+                     }
+                 }
+             } else {
+                 // Original logic for modules, quizzes, and questions
+                 const reorderType = type || (currentActiveTab === 'modules' ? 'modules' : currentActiveTab === 'quizzes' ? 'quizzes' : null);
+                 
+                 if (isReorderMode && currentReorderType === reorderType) {
+                     isReorderMode = false;
+                     currentReorderType = null;
+                 } else {
+                     isReorderMode = true;
+                     currentReorderType = reorderType;
+                 }
+                 
+                 const btn = document.getElementById('reorderBtn');
+                 const allItems = document.querySelectorAll('.draggable-item');
+                 
+                 if (isReorderMode) {
+                     btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Done Rearranging';
+                     btn.classList.remove('btn-warning');
+                     btn.classList.add('btn-success');
+                     
+                     allItems.forEach(item => {
+                         if (type === 'modules' && item.dataset.moduleId) {
+                             item.classList.add('reorder-mode');
+                         } else if (type === 'quizzes' && item.dataset.quizId) {
+                             item.classList.add('reorder-mode');
+                         } else if (type === 'questions' && item.dataset.questionId) {
+                             item.classList.add('reorder-mode');
+                         } else if (type === 'lessons' && item.dataset.lessonId) {
+                             item.classList.add('reorder-mode');
+                         } else {
+                             item.classList.remove('reorder-mode');
+                         }
+                     });
+                 } else {
+                     btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/></svg> Rearrange';
+                     btn.classList.remove('btn-success');
+                     btn.classList.add('btn-warning');
+                     
+                     allItems.forEach(item => {
+                         item.classList.remove('reorder-mode');
+                     });
+                 }
+             }
+         }
         
 
         
@@ -1693,7 +1871,7 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
             }
         }
         
-        function deleteResource(id) {
+         function deleteResource(id) {
             if (confirm('Are you sure you want to delete this resource?')) {
                 const formData = new FormData();
                 formData.append('action', 'delete_resource');
@@ -1702,11 +1880,16 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                 fetch('', {
                     method: 'POST',
                     body: formData
-                }).then(response => response.text())
-                .then(html => {
-                    // Reload the resources list to update the UI
-                    const lessonId = document.getElementById('resourceLessonId').value;
-                    loadLessonResources(lessonId);
+                }).then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Reload the resources list to update the UI
+                        const lessonId = document.getElementById('resourceLessonId').value;
+                        loadLessonResources(lessonId);
+                        showSuccessMessage(data.message || 'Resource deleted successfully');
+                    } else {
+                        alert('Error: ' + (data.error || 'Unknown error occurred'));
+                    }
                 }).catch(error => {
                     console.error('Error deleting resource:', error);
                     alert('Error deleting resource. Please try again.');
@@ -1721,12 +1904,18 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
              const file = document.getElementById('resourceFile').files[0];
              const url = document.getElementById('resourceUrl').value;
              
+             console.log('addResource called with:', { lessonId, title, type, file: file ? file.name : 'none', url });
+             
+             if (!lessonId) {
+                 alert('Error: Lesson ID is missing. Please close and reopen the lesson edit form.');
+                 console.error('Lesson ID is missing');
+                 return;
+             }
+             
              if (!title || (!file && !url)) {
                  alert('Please provide a title and either a file or URL');
                  return;
              }
-             
-             console.log('Adding resource:', { lessonId, title, type, file: file ? file.name : 'none', url });
              
              const formData = new FormData();
              formData.append('action', 'add_resource');
@@ -1740,63 +1929,77 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                  formData.append('resource_url', url);
              }
              
+             console.log('Sending request to add resource...');
+             
              fetch('', {
                  method: 'POST',
                  body: formData
              }).then(response => {
                  console.log('Response status:', response.status);
-                 console.log('Response headers:', response.headers);
-                 return response.text().then(text => {
-                     console.log('Raw response:', text);
-                     try {
-                         return JSON.parse(text);
-                     } catch (e) {
-                         console.error('Failed to parse JSON response:', e);
-                         alert('Error: Invalid response from server');
-                         return null;
-                     }
-                 });
+                 console.log('Response headers:', [...response.headers.entries()]);
+                 return response.text();
              })
-             .then(data => {
-                 if (!data) return;
-                 
-                 console.log('Response data:', data);
-                 if (data.success) {
-                     // Reload the resources list to show the new resource
-                     loadLessonResources(lessonId);
-                     // Clear the form fields
-                     document.getElementById('resourceTitle').value = '';
-                     document.getElementById('resourceFile').value = '';
-                     document.getElementById('resourceUrl').value = '';
-                     // Show success message
-                     showSuccessMessage(data.message);
-                 } else {
-                     alert('Error: ' + data.error);
+             .then(text => {
+                 console.log('Raw response text:', text);
+                 try {
+                     const data = JSON.parse(text);
+                     console.log('Parsed JSON:', data);
+                     
+                     if (data.success) {
+                         // Reload the resources list to show the new resource
+                         loadLessonResources(lessonId);
+                         // Clear the form fields
+                         document.getElementById('resourceTitle').value = '';
+                         document.getElementById('resourceFile').value = '';
+                         document.getElementById('resourceUrl').value = '';
+                         // Show success message
+                         showSuccessMessage(data.message || 'Resource added successfully');
+                     } else {
+                         alert('Error: ' + (data.error || 'Unknown error occurred'));
+                     }
+                 } catch (e) {
+                     console.error('Failed to parse JSON:', e);
+                     console.error('Response text was:', text);
+                     alert('Error: Invalid response from server. Check console for details.');
                  }
              }).catch(error => {
-                 console.error('Error adding resource:', error);
+                 console.error('Fetch error:', error);
                  alert('Error adding resource. Please try again.');
              });
          }
         
         function loadLessonResources(lessonId) {
+            console.log('Loading resources for lesson:', lessonId);
             // Load lesson resources from the server
             fetch('?action=get_resources&lesson_id=' + lessonId)
-                .then(response => response.json())
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Resources data:', data);
                     const resourcesList = document.getElementById('lessonResourcesList');
-                    if (data.resources.length === 0) {
+                    if (!resourcesList) {
+                        console.error('lessonResourcesList element not found');
+                        return;
+                    }
+                    
+                    if (!data.resources || data.resources.length === 0) {
+                        console.log('No resources found, showing empty message');
                         resourcesList.innerHTML = '<p style="color: var(--gray-500); font-size: 0.875rem;">No resources added yet.</p>';
                     } else {
-                        resourcesList.innerHTML = data.resources.map(resource => `
+                        console.log('Rendering', data.resources.length, 'resources');
+                        resourcesList.innerHTML = data.resources.map(resource => {
+                            console.log('Rendering resource:', resource);
+                            return `
                             <div class="resource-item">
                                 <div>
-                                    <strong>${resource.title}</strong>
+                                    <strong>${resource.title || 'Untitled'}</strong>
                                     <div style="font-size: 0.875rem; color: var(--gray-500);">
-                                        ${resource.file_type}
+                                        ${resource.file_type || 'document'}
                                     </div>
                                 </div>
-                                <div class="resource-actions">
+                                <div style="display: flex; gap: 0.5rem;">
                                     <a href="${resource.file_path}" target="_blank" class="btn btn-secondary btn-sm">
                                         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                         View
@@ -1807,12 +2010,16 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                                     </button>
                                 </div>
                             </div>
-                        `).join('');
+                        `;
+                        }).join('');
                     }
                 })
                 .catch(error => {
                     console.error('Error loading resources:', error);
-                    document.getElementById('lessonResourcesList').innerHTML = '<p style="color: var(--gray-500); font-size: 0.875rem;">No resources added yet.</p>';
+                    const resourcesList = document.getElementById('lessonResourcesList');
+                    if (resourcesList) {
+                        resourcesList.innerHTML = '<p style="color: var(--danger); font-size: 0.875rem;">Error loading resources. Please try again.</p>';
+                    }
                 });
         }
         
@@ -1821,21 +2028,41 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
             alert('Quiz results feature coming soon!');
         }
         
-        // Close modals on outside click
-        document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    this.classList.remove('active');
-                }
-            });
-        });
+          function toggleVideoFields(formType) {
+              const prefix = formType === 'edit' ? 'editLesson' : 'addLesson';
+              const hasVideoCheckbox = document.getElementById(prefix + 'HasVideo');
+              const videoFieldsDiv = document.getElementById(prefix + 'VideoFields');
+              const videoUrlInput = document.getElementById(prefix + 'VideoUrl');
+              const videoStartInput = document.getElementById(prefix + 'VideoStart');
+              const videoStopInput = document.getElementById(prefix + 'VideoStop');
+              const videoDurationInput = document.getElementById(prefix + 'VideoDuration');
+              
+              if (hasVideoCheckbox.checked) {
+                  videoFieldsDiv.style.display = 'block';
+              } else {
+                  videoFieldsDiv.style.display = 'none';
+                  if (videoUrlInput) videoUrlInput.value = '';
+                  if (videoStartInput) videoStartInput.value = '';
+                  if (videoStopInput) videoStopInput.value = '';
+                  if (videoDurationInput) videoDurationInput.value = '';
+              }
+          }
+         
+         // Close modals on outside click
+         document.querySelectorAll('.modal').forEach(modal => {
+             modal.addEventListener('click', function(e) {
+                 if (e.target === this) {
+                     this.classList.remove('active');
+                 }
+             });
+         });
         
         // =====================
         // Drag and Drop Reordering
         // =====================
         let draggedItem = null;
         
-        // Initialize drag events for all lists
+         // Initialize drag events for all lists
         function initDragEvents(listId, type) {
             const draggableList = document.getElementById(listId);
             if (!draggableList) return;
@@ -1847,9 +2074,17 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                     draggedItem = this;
                     this.classList.add('dragging');
                     e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', type === 'modules' ? this.dataset.moduleId : 
-                                                   type === 'quizzes' ? this.dataset.quizId : 
-                                                   this.dataset.questionId);
+                    let data = '';
+                    if (type === 'modules') {
+                        data = this.dataset.moduleId;
+                    } else if (type === 'quizzes') {
+                        data = this.dataset.quizId;
+                    } else if (type === 'questions') {
+                        data = this.dataset.questionId;
+                    } else if (type === 'lessons') {
+                        data = this.dataset.lessonId;
+                    }
+                    e.dataTransfer.setData('text/plain', data);
                 });
                 item.addEventListener('dragend', handleDragEnd);
             });
@@ -1862,17 +2097,26 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
             draggableList.addEventListener('dragleave', handleDragLeave);
         }
         
-        function handleDragStart(e, itemId, type) {
+         function handleDragStart(e, itemId, type) {
             if (!isReorderMode || currentReorderType !== type) return;
             
             draggedItem = document.querySelector(`[data-${type}-id="${itemId}"]`);
             draggedItem.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', itemId);
+            
+            // If it's a lesson, store the module ID for use in drag end
+            if (type === 'lessons') {
+                moduleId = draggedItem.dataset.moduleId;
+                console.log('Dragging lesson from module:', moduleId);
+            }
         }
         
-        function handleDragEnd(e) {
+          function handleDragEnd(e) {
+            let lessonModuleId = null;
             if (draggedItem) {
+                // Get module ID from the dragged item before clearing it
+                lessonModuleId = draggedItem.dataset.moduleId;
                 draggedItem.classList.remove('dragging');
                 draggedItem = null;
             }
@@ -1894,8 +2138,79 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                     const quizId = activeQuiz.id.replace('quiz-content-', '');
                     saveQuestionOrder(quizId);
                 }
+            } else if (currentReorderType === 'lessons') {
+                // Get module ID from the dragged item or find active module
+                if (lessonModuleId) {
+                    console.log('Saving lesson order for module:', lessonModuleId);
+                    saveLessonOrder(lessonModuleId);
+                } else {
+                    const activeModule = document.querySelector('.module-item .module-content:not([style*="display: none"])');
+                    if (activeModule) {
+                        const moduleId = activeModule.id.replace('module-content-', '');
+                        console.log('Saving lesson order for active module:', moduleId);
+                        saveLessonOrder(moduleId);
+                    }
+                }
             }
         }
+        
+          function saveLessonOrder(moduleId) {
+              console.log('saveLessonOrder called for module:', moduleId);
+              const draggableList = document.getElementById('lessonsList-' + moduleId);
+              if (!draggableList) {
+                  console.error('lessonsList-' + moduleId + ' not found');
+                  return;
+              }
+              
+              const items = [...draggableList.querySelectorAll('.draggable-item')];
+              const lessonOrder = items.map(item => item.dataset.lessonId);
+              console.log('Lesson order:', lessonOrder);
+              
+              const form = document.getElementById('reorderLessonsForm-' + moduleId);
+              if (!form) {
+                  console.error('reorderLessonsForm-' + moduleId + ' not found');
+                  return;
+              }
+              
+              // Update existing inputs or add new ones
+              const existingInputs = form.querySelectorAll('input[name^="lesson_order"]');
+              
+              // Remove any extra inputs
+              if (existingInputs.length > lessonOrder.length) {
+                  for (let i = lessonOrder.length; i < existingInputs.length; i++) {
+                      existingInputs[i].remove();
+                  }
+              }
+              
+              // Update or create inputs
+              lessonOrder.forEach((lessonId, index) => {
+                  let input = document.getElementById('lesson_order_' + moduleId + '_' + index);
+                  if (!input) {
+                      input = document.createElement('input');
+                      input.type = 'hidden';
+                      input.name = 'lesson_order[' + index + ']';
+                      input.id = 'lesson_order_' + moduleId + '_' + index;
+                      form.appendChild(input);
+                  }
+                  input.value = lessonId;
+              });
+              
+              // Submit the form via fetch for AJAX update
+              const formData = new FormData(form);
+              console.log('Form data:', [...formData]);
+              fetch('', {
+                  method: 'POST',
+                  body: formData
+              }).then(response => {
+                  console.log('Response status:', response.status);
+                  return response.json();
+              }).then(data => {
+                  console.log('Response data:', data);
+                  showSuccessMessage('Lesson order saved!');
+              }).catch(error => {
+                  console.error('Error saving lesson order:', error);
+              });
+          }
         
         function handleDragOver(e) {
             if (!isReorderMode) return;
@@ -2004,6 +2319,11 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
         }
         
         // =====================
+        // Lesson Reordering
+        // =====================
+
+        
+        // =====================
         // Question Reordering
         // =====================
         function saveQuestionOrder(quizId) {
@@ -2051,16 +2371,24 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
             }, 2000);
         }
         
-         // Initialize all drag events
-         document.addEventListener('DOMContentLoaded', function() {
-             initDragEvents('modulesList', 'modules');
-             initDragEvents('quizzesList', 'quizzes');
-             
-             // Initialize question list drag events for all quizzes
-             <?php foreach ($quizzes as $quiz): ?>
-             initDragEvents('questionsList-<?= $quiz['id'] ?>', 'questions');
-             <?php endforeach; ?>
-         });
+          // Initialize all drag events and load expanded modules
+          document.addEventListener('DOMContentLoaded', function() {
+              initDragEvents('modulesList', 'modules');
+              initDragEvents('quizzesList', 'quizzes');
+              
+              // Initialize question list drag events for all quizzes
+              <?php foreach ($quizzes as $quiz): ?>
+              initDragEvents('questionsList-<?= $quiz['id'] ?>', 'questions');
+              <?php endforeach; ?>
+              
+              // Initialize lesson list drag events for all modules
+              <?php foreach ($modules as $module): ?>
+              initDragEvents('lessonsList-<?= $module['id'] ?>', 'lessons');
+              <?php endforeach; ?>
+              
+              // Load saved expanded modules
+              loadExpandedModules();
+          });
     </script>
     <!-- Quill Rich Text Editor Script -->
     <script src="https://cdn.quilljs.com/1.3.7/quill.js"></script>
@@ -2101,8 +2429,8 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                       document.getElementById('editModuleId').value = module.id;
                       document.getElementById('editModuleTitle').value = module.title;
                       initQuillEditor('editModuleDescription');
-                      // Set existing content - unescape HTML entities
-                      quillEditors['editModuleDescription'].root.innerHTML = unescapeHtml(module.description || '');
+                      // Set existing content - don't unescape
+                      quillEditors['editModuleDescription'].root.innerHTML = module.description || '';
                       document.getElementById('editModulePublished').checked = module.is_published == 1;
                       document.getElementById('editModuleModal').classList.add('active');
                   }
@@ -2114,20 +2442,27 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                   document.getElementById('addLessonModal').classList.add('active');
                   initQuillEditor('addLessonDescription');
                   initQuillEditor('addLessonContent');
-              } else if (type === 'editLesson') {
-                  const lesson = Object.values(lessonsData).flat().find(l => l.id === id);
-                  if (lesson) {
-                      document.getElementById('editLessonId').value = lesson.id;
-                      document.getElementById('editLessonTitle').value = lesson.title;
-                      initQuillEditor('editLessonDescription');
-                      initQuillEditor('editLessonContent');
-                      // Set existing content - unescape HTML entities
-                      quillEditors['editLessonDescription'].root.innerHTML = unescapeHtml(lesson.description || '');
-                      quillEditors['editLessonContent'].root.innerHTML = unescapeHtml(lesson.content || '');
-                      document.getElementById('editLessonVideoUrl').value = lesson.video_url || '';
-                      document.getElementById('editLessonVideoDuration').value = lesson.video_duration || '';
-                      document.getElementById('editLessonIsFree').checked = lesson.is_free == 1;
-                      document.getElementById('editLessonIsPublished').checked = lesson.is_published == 1;
+               } else if (type === 'editLesson') {
+                   const lesson = Object.values(lessonsData).flat().find(l => l.id === id);
+                   if (lesson) {
+                       document.getElementById('editLessonId').value = lesson.id;
+                       document.getElementById('editLessonTitle').value = lesson.title;
+                       initQuillEditor('editLessonDescription');
+                       initQuillEditor('editLessonContent');
+                       // Set existing content - don't unescape, Quill handles it
+                       quillEditors['editLessonDescription'].root.innerHTML = lesson.description || '';
+                       quillEditors['editLessonContent'].root.innerHTML = lesson.content || '';
+                        document.getElementById('editLessonVideoUrl').value = unescapeHtml(lesson.video_url || '');
+                        document.getElementById('editLessonVideoStart').value = lesson.video_start || '';
+                        document.getElementById('editLessonVideoStop').value = lesson.video_stop || '';
+                        document.getElementById('editLessonVideoDuration').value = lesson.video_duration || '';
+                       document.getElementById('editLessonIsFree').checked = lesson.is_free == 1;
+                       document.getElementById('editLessonIsPublished').checked = lesson.is_published == 1;
+                       
+                       // Initialize video toggle
+                       const hasVideo = lesson.video_url && lesson.video_url.trim() !== '';
+                       document.getElementById('editLessonHasVideo').checked = hasVideo;
+                       document.getElementById('editLessonVideoFields').style.display = hasVideo ? 'block' : 'none';
                       
                       // Debug: Set and log lesson ID for resources
                       const resourceLessonIdInput = document.getElementById('resourceLessonId');
@@ -2153,8 +2488,8 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
                       document.getElementById('editQuizId').value = quiz.id;
                       document.getElementById('editQuizTitle').value = quiz.title;
                       initQuillEditor('editQuizDescription');
-                      // Set existing content - unescape HTML entities
-                      quillEditors['editQuizDescription'].root.innerHTML = unescapeHtml(quiz.description || '');
+                      // Set existing content - don't unescape
+                      quillEditors['editQuizDescription'].root.innerHTML = quiz.description || '';
                       document.getElementById('editQuizTimeLimit').value = quiz.time_limit || 0;
                       document.getElementById('editQuizPassingScore').value = quiz.passing_score;
                       document.getElementById('editQuizMaxAttempts').value = quiz.max_attempts;
@@ -2175,14 +2510,10 @@ define('PAGE_TITLE', 'Manage Course: ' . $course['title']);
           
           // Helper function to unescape HTML entities
           function unescapeHtml(text) {
-              const map = {
-                  '&amp;': '&',
-                  '&lt;': '<',
-                  '&gt;': '>',
-                  '&quot;': '"',
-                  '&#039;': "'"
-              };
-              return text.replace(/&amp;|&lt;|&gt;|&quot;|&#039;/g, function(m) { return map[m]; });
+              if (!text) return '';
+              const textarea = document.createElement('textarea');
+              textarea.innerHTML = text;
+              return textarea.value;
           }
         
         // Save Quill content to hidden inputs before form submission

@@ -7,11 +7,11 @@
 require_once '../config/config.php';
 require_once '../config/database.php';
 
-// Authentication check - users must be logged in to access lessons
-if (!isLoggedIn()) {
-    $_SESSION['redirect_url'] = $_SERVER['REQUEST_URI'];
-    redirect(APP_URL . '/auth/login.php');
-}
+ // Authentication check - users must be logged in to access lessons
+ if (!isLoggedIn()) {
+     $_SESSION['redirect_url'] = $_SERVER['REQUEST_URI'];
+     redirect(APP_URL . '/auth/login.php');
+ }
 
 // Get parameters
 $courseId = intval($_GET['course_id'] ?? 0);
@@ -27,16 +27,16 @@ if (!$course) {
     redirect(APP_URL . '/course/index.php');
 }
 
-// Check enrollment
-$isEnrolled = Enrollment::isEnrolled($_SESSION['user_id'], $courseId);
+ // Check enrollment
+ $isEnrolled = Enrollment::isEnrolled($_SESSION['user_id'], $courseId);
 
-// If not enrolled and lesson is not free, redirect to course details
-if (!$isEnrolled) {
-    $lesson = Lesson::getById($lessonId);
-    if (!$lesson || !$lesson['is_free']) {
-        redirect(APP_URL . '/course/details.php?id=' . $courseId);
-    }
-}
+ // If not enrolled and lesson is not free, redirect to course details
+ if (!$isEnrolled) {
+     $lesson = Lesson::getById($lessonId);
+     if (!$lesson || !$lesson['is_free']) {
+         redirect(APP_URL . '/course/details.php?id=' . $courseId);
+     }
+ }
 
 // Fetch lesson
 if ($lessonId > 0) {
@@ -477,19 +477,139 @@ define('PAGE_TITLE', $lesson['title']);
             <?php if ($lesson['video_url']): ?>
                 <div class="lesson-video">
                     <?php
-                    // Convert YouTube URL to embed URL
+                    // Handle YouTube URLs and embed codes
                     $videoUrl = $lesson['video_url'];
-                    if (strpos($videoUrl, 'youtube.com/watch?v=') !== false) {
-                        preg_match('/v=([a-zA-Z0-9_-]+)/', $videoUrl, $matches);
+                    $embedUrl = '';
+                    
+                    // Check if it's already an embed code
+                    if (strpos($videoUrl, '<iframe') !== false) {
+                        // Extract src from iframe
+                        preg_match('/src="([^"]+)"/', $videoUrl, $matches);
                         if (!empty($matches[1])) {
-                            $videoUrl = 'https://www.youtube.com/embed/' . $matches[1];
+                            $embedUrl = $matches[1];
+                        }
+                    } else {
+                        // Convert YouTube watch URL to embed URL
+                        $originalUrl = $videoUrl;
+                        $videoUrl = strtolower($videoUrl); // Make it case insensitive for searching
+                        
+                        if (strpos($videoUrl, 'youoube.com') !== false) {
+                            $originalUrl = str_replace('youoube.com', 'youtube.com', $originalUrl);
+                        }
+                        
+                        if (strpos($originalUrl, 'youtube.com/watch?v=') !== false) {
+                            preg_match('/v=([a-zA-Z0-9_-]+)/', $originalUrl, $matches);
+                            if (!empty($matches[1])) {
+                                $embedUrl = 'https://www.youtube.com/embed/' . $matches[1];
+                                // Preserve any additional parameters (like start, end, etc.)
+                                if (strpos($originalUrl, '&') !== false) {
+                                    $params = substr($originalUrl, strpos($originalUrl, '&'));
+                                    $embedUrl .= $params;
+                                }
+                            }
+                        } elseif (strpos($originalUrl, 'youtu.be/') !== false) {
+                            // Handle youtu.be short URLs
+                            preg_match('/youtu\.be\/([a-zA-Z0-9_-]+)/', $originalUrl, $matches);
+                            if (!empty($matches[1])) {
+                                $embedUrl = 'https://www.youtube.com/embed/' . $matches[1];
+                                if (strpos($originalUrl, '?') !== false) {
+                                    $params = substr($originalUrl, strpos($originalUrl, '?'));
+                                    $embedUrl .= $params;
+                                }
+                            }
+                        } elseif (strpos($originalUrl, 'youtube.com/embed/') !== false) {
+                            // Already an embed URL
+                            $embedUrl = $originalUrl;
+                        } else {
+                            // Treat as direct video URL
+                            $embedUrl = $originalUrl;
+                        }
+                    }
+                    
+                    // Add start and stop parameters to YouTube embed URL
+                    if (strpos($embedUrl, 'youtube.com/embed/') !== false) {
+                        $hasParams = strpos($embedUrl, '?') !== false;
+                        
+                        if ($lesson['video_start'] > 0) {
+                            $embedUrl .= ($hasParams ? '&' : '?') . 'start=' . $lesson['video_start'];
+                            $hasParams = true;
+                        }
+                        
+                        if ($lesson['video_stop'] > 0 && $lesson['video_stop'] > $lesson['video_start']) {
+                            $embedUrl .= ($hasParams ? '&' : '?') . 'end=' . $lesson['video_stop'];
                         }
                     }
                     ?>
-                    <iframe src="<?= sanitize($videoUrl) ?>" 
-                            title="<?= sanitize($lesson['title']) ?>"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowfullscreen></iframe>
+                    <div id="youtube-player"></div>
+                    
+                    <script src="https://www.youtube.com/iframe_api"></script>
+                    <script>
+                        let player;
+                        
+                        function onYouTubeIframeAPIReady() {
+                            // Extract video ID from video URL directly (more reliable)
+                            const videoUrl = "<?= sanitize($lesson['video_url']) ?>";
+                            let videoId = null;
+                            
+                            // Try to extract from various YouTube URL formats
+                            const idPatterns = [
+                                /(?:youtube\.com\/watch\?.*v=)([a-zA-Z0-9_-]+)/,
+                                /(?:youtu\.be\/)([a-zA-Z0-9_-]+)/,
+                                /(?:youtube\.com\/embed\/)([a-zA-Z0-9_-]+)/
+                            ];
+                            
+                            for (let pattern of idPatterns) {
+                                const match = videoUrl.match(pattern);
+                                if (match) {
+                                    videoId = match[1];
+                                    break;
+                                }
+                            }
+                            
+                            if (videoId) {
+                                player = new YT.Player('youtube-player', {
+                                    height: '100%',
+                                    width: '100%',
+                                    videoId: videoId,
+                                    playerVars: {
+                                        'start': <?= $lesson['video_start'] ?>,
+                                        'rel': 0
+                                    },
+                                    events: {
+                                        'onReady': onPlayerReady,
+                                        'onStateChange': onPlayerStateChange
+                                    }
+                                });
+                            }
+                        }
+                        
+                        function onPlayerReady(event) {
+                            // Start playing when ready
+                            event.target.playVideo();
+                        }
+                        
+                        function onPlayerStateChange(event) {
+                            // Check if we need to stop the video
+                            const stopTime = <?= $lesson['video_stop'] ?>;
+                            if (stopTime > 0) {
+                                if (event.data === YT.PlayerState.PLAYING) {
+                                    checkTime();
+                                }
+                            }
+                        }
+                        
+                        function checkTime() {
+                            const stopTime = <?= $lesson['video_stop'] ?>;
+                            if (player && stopTime > 0) {
+                                const currentTime = player.getCurrentTime();
+                                if (currentTime >= stopTime) {
+                                    player.pauseVideo();
+                                } else {
+                                    setTimeout(checkTime, 500); // Check every 500ms
+                                }
+                            }
+                        }
+                    </script>
                 </div>
             <?php endif; ?>
             

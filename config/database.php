@@ -220,8 +220,12 @@ class Lesson {
         return DatabaseConnection::fetchAll("SELECT * FROM lessons WHERE module_id = ? ORDER BY order_index", [$moduleId]);
     }
     
-    public static function getMaxOrderIndex($moduleId) {
+     public static function getMaxOrderIndex($moduleId) {
         return DatabaseConnection::fetchColumn("SELECT COALESCE(MAX(order_index), 0) FROM lessons WHERE module_id = ?", [$moduleId]);
+    }
+    
+    public static function updateOrder($id, $orderIndex) {
+        return DatabaseConnection::update('lessons', ['order_index' => $orderIndex], 'id = :id', ['id' => $id]);
     }
 }
 
